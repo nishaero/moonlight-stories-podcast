@@ -1,0 +1,7 @@
+# Serves the generated feeds and audio as static files; put a TLS reverse proxy in front of it.
+services:
+  podcast-feed:
+    image: nginx:alpine
+    ports: ["8110:80"]
+    volumes: ["./public:/usr/share/nginx/html:ro"]
+    restart: unless-stopped

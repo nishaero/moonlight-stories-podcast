@@ -1,0 +1,8 @@
+numpy
+scipy
+soundfile
+librosa
+pyloudnorm
+pillow
+qwen-tts        # TTS engine (GPU); the AMD ROCm torch wheels are installed by install_gpu.sh
+# optional fallback engine (CPU, personal non-commercial licence): coqui-tts

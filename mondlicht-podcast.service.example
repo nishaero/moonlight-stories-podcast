@@ -1,0 +1,14 @@
+# systemd user units: run daily and rebuild the feed. Copy to ~/.config/systemd/user/ and adjust paths.
+[Unit]
+Description=Generate today's bedtime-story episodes (de + en)
+[Service]
+Type=oneshot
+WorkingDirectory=%h/yoto-bedtime-podcast
+Environment=PODCAST_BASE_URL=https://podcast.example.com
+ExecStart=%h/yoto-bedtime-podcast/.venv/bin/python show.py
+# ---- mondlicht-podcast.timer ----
+# [Timer]
+# OnCalendar=*-*-* 13:00:00
+# Persistent=true
+# [Install]
+# WantedBy=timers.target

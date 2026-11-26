@@ -1,0 +1,12 @@
+{
+ "ref_text": "Es ist ein ruhiger Abend. Die Sterne leuchten leise am Fenster, und du kuschelst dich ganz tief in deine weiche Decke. Alles ist warm, alles ist gut. Schlaf schön.",
+ "descs": {
+  "A_mama": "A warm, gentle young woman, about 30, with a soft, soothing, slightly smiling voice. She speaks slowly and calmly, like a loving mother telling a bedtime story to her three-year-old: tender, natural intonation with gentle ups and downs, soft breathy warmth, unhurried pauses, never robotic.",
+  "B_erzieherin": "A friendly, cheerful kindergarten teacher in her late 20s with a bright but very soft voice, a little higher in pitch. She tells a bedtime story slowly and lovingly to small children, with lively but quiet expressiveness, smiling while she speaks, clear and natural like a real person.",
+  "C_erzaehlerin": "A calm, warm female audiobook narrator, about 40, with a slightly lower, velvety, comforting voice. She speaks very slowly and softly, like reading a bedtime story in a dimly lit room, with natural breathing, gentle melodic phrasing and long relaxed pauses.",
+  "E3_expressiv": "A calm, velvety female audiobook narrator, about 40, with a lower warm voice who is still expressive: clear melodic phrasing, noticeable pitch rises on questions and falls at the ends of sentences, soft whispers for secret moments, natural breaths, unhurried."
+ },
+ "texts": {
+  "E3_expressiv": "Oh, schau mal! Da hinten, ganz leise... was ist das? Ein kleiner Igel! Er blinzelt dich an und flüstert: Hallo, mein Freund. Möchtest du mit mir kommen? Dann komm, ich zeige dir etwas Schönes. Pssst... aber ganz leise, ja?"
+ }
+}

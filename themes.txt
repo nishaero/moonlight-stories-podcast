@@ -1,0 +1,46 @@
+# one theme per line: a small situation a 3-4 year old knows, with a feeling and a kind ending.
+# optional season prefix  "11,12,1|theme"  (months in which it fits); lines without a prefix fit all year. The show picks one per day and avoids repeats.
+Der kleine Bär Brummo findet seinen Teddy nicht und kann deshalb nicht einschlafen. Seine Freunde helfen ihm suchen, und am Ende liegt der Teddy ganz nah bei ihm.
+Die Ente Quaki hat Angst vor dem Baden. Mit ihrem Gummi-Freund, viel Schaum und Mamas Hilfe wird das Wasser warm und lustig.
+Der kleine Traktor Toni hilft dem Bauern bei der Arbeit und ist abends ganz müde und stolz. Dann fährt er in seine warme Scheune.
+Das Müllauto Rumpel sammelt am Morgen alle Tonnen ein. Abends wird es gewaschen und darf endlich ausruhen.
+Der Bagger Benno baut mit einem Kind eine große Sandburg und bekommt zum Schluss eine Gute-Nacht-Umarmung.
+Die Feuerwehr-Fanni hilft einer Katze vom Baum und wird dafür mit warmem Kakao belohnt.
+Ein kleines Kind besucht Oma und Opa. Sie backen zusammen Kekse, kuscheln sich auf das Sofa und lesen ein Buch.
+Das Häschen Hoppel hat Angst vor der Dunkelheit. Der Mond und ein kleines Nachtlicht zeigen ihm, dass alles vertraut und sicher ist.
+Der Igel Piko teilt seinen Lieblingsapfel mit seiner neuen Freundin. Gemeinsam schmeckt er noch besser.
+Der kleine Dino Dodo mag keinen Brokkoli, probiert aber ein winziges Stück und ist überrascht. Dann schläft er satt und zufrieden ein.
+Ein kleines Kind hilft Mama und Papa beim Wäscheaufhängen und beim Einkaufen und ist abends stolz auf seine Hilfe.
+Das Schäfchen Wolle geht zum ersten Mal in die Kita. Es ist aufgeregt, findet einen Freund, und am Ende kommt Mama zum Abholen.
+Ein Kind füttert mit Papa die Enten am Teich. Dann winken beide den Enten zum Abschied zu und gehen heim ins Warme.
+Alle Tiere auf dem Bauernhof sagen Gute Nacht: das Schwein, die Kuh, das Pferd und das Huhn, eines nach dem anderen.
+Die Sonne ist müde und geht zu Bett. Der Mond übernimmt ihren Platz und passt auf, dass alle gut schlafen.
+Die Katze Mimi macht abends ihre Runde durch das Haus und sagt allen Gute Nacht, bis sie sich zusammenrollt und schnurrt.
+Das Marienkäfer-Mädchen Lilli verliert beim Spielen ihre Punkte-Freundin und findet sie hinter einem großen Blatt wieder.
+Die kleine Schnecke Schneckchen ist sehr langsam, kommt aber doch an ihr Ziel, ein Blatt voller Regentropfen, und wird gelobt.
+Ein Kind springt in Pfützen, zieht dann trockene Socken an und trinkt warmen Tee.
+10,11,12,1,2|Es schneit zum ersten Mal. Ein Kind und ein Schneehase bauen einen kleinen Schneemann und trinken danach warmen Kakao.
+11,12|Der Nikolaus kommt mit einem Sack voll kleiner Überraschungen, und ein Kind stellt voller Vorfreude seine Stiefel hinaus.
+11,12|Beim Laternenumzug leuchten viele bunte Laternen, und ein Kind singt mit allen ein Lied und wird danach müde und glücklich.
+12|Im Advent backen ein Kind und Mama Plätzchen, es duftet nach Zimt, und die erste Kerze brennt.
+12|Das Rentier Rudi bekommt ein warmes Schal vom Weihnachtsmann und schläft müde ein, bevor die Geschenke ankommen.
+3,4,5|Die Blumen im Garten wachen auf, ein Kind gießt sie und sieht den ersten Schmetterling.
+6,7,8|Ein Kind und Papa liegen abends im Gras und zählen Sterne und Glühwürmchen, bis die Augen zufallen.
+6,7,8|Am Strand baut ein Kind mit Mama eine Sandburg, die Wellen kommen sanft, und die Sonne geht unter.
+Der kleine Zug Tuti fährt durch das Land, hält an allen Bahnhöfen und bringt jedes Tier nach Hause.
+Der Bus Bummel bringt am Abend alle Kinder von der Kita heim, und jedes winkt ihm zum Abschied.
+Der kleine Hund Waldi wartet an der Tür, bis sein Kind nach Hause kommt, und kuschelt sich dann in sein Körbchen.
+Der Papa-Bär bringt sein Bärenkind ins Bett, erzählt ihm von seinem Tag und singt ein Lied.
+Eine Maus hat Geburtstag. Alle Freunde bringen kleine Geschenke, es gibt Kuchen, und dann geht sie müde ins Bett.
+Das kleine Gespenst Fluffi ist gar nicht gruselig, sondern möchte nur kuscheln und mit den Kindern Kekse essen.
+Ein Kind hat sich das Knie gestoßen. Das Pflaster, ein Kuss von Mama und Tee machen alles wieder gut.
+Der Vogel Pieps lernt fliegen, fällt ein paar Mal sanft ins weiche Gras und fliegt dann los.
+Zwei Freunde, ein Hase und ein Fuchs, streiten kurz um einen Ball, vertragen sich wieder und spielen zusammen.
+Ein Kind putzt vor dem Schlafen die Zähne, und die Zahnbürste erzählt dabei eine kleine Geschichte von den müden Zähnen.
+Ein Kind baut mit Papa eine Höhle aus Decken und Kissen, in der sich alle Kuscheltiere versammeln.
+Der Elefant Ella hat große Ohren und hört nachts alles. Ein kleiner Freund zeigt ihr, wie schön leise Geräusche sein können.
+Der Schmetterling Flatter kann nicht einschlafen, bis die Blumen ihm ein Wiegenlied singen.
+Die Eule Olli bleibt nachts wach und passt auf, dass alle Tiere im Wald gut schlafen können.
+Das Pony Pünktchen bekommt von einem Kind eine Karotte und einen Streichler und geht danach friedlich in seinen warmen Stall.
+Ein Kind schaut aus dem Autofenster und sieht, dass der Mond immer mit ihnen fährt. Dann schläft es im Auto ein.
+Ein Kind und seine Katze lauschen am Fenster dem Regen und schlafen dabei ein.

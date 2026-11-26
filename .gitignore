@@ -1,0 +1,14 @@
+# personal / generated
+child.json
+history.json
+public/
+work/
+samples/
+voices/*.wav
+voices/*.mp3
+voices/cand/
+voices/exp/
+*.log
+__pycache__/
+.env
+*.env
