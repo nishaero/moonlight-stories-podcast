@@ -1,14 +1,17 @@
-# systemd user units: run daily and rebuild the feed. Copy to ~/.config/systemd/user/ and adjust paths.
+# systemd user units: run daily. Copy to ~/.config/systemd/user/ and adjust paths; create mondlicht-podcast.timer with the OnCalendar below.
 [Unit]
-Description=Generate today's bedtime-story episodes (de + en)
+Description=Moonlight Stories: write, voice, check and stage today's episodes (de + en)
+After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=%h/yoto-bedtime-podcast
-Environment=PODCAST_BASE_URL=https://podcast.example.com
+Environment=PODCAST_BASE_URL=https://podcast.example.com MANUAL_APPROVAL=1
+# if the GPU is shared with other heavy jobs, pause them here with ExecStartPre / ExecStopPost
 ExecStart=%h/yoto-bedtime-podcast/.venv/bin/python show.py
+TimeoutStartSec=4h
 # ---- mondlicht-podcast.timer ----
 # [Timer]
-# OnCalendar=*-*-* 13:00:00
+# OnCalendar=*-*-* 14:00:00
 # Persistent=true
 # [Install]
 # WantedBy=timers.target

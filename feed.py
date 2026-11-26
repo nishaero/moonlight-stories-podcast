@@ -4,6 +4,7 @@ import json, os, html, email.utils, datetime as dt
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent; PUB = ROOT / "public"
 BASE = os.environ.get("PODCAST_BASE_URL", "https://podcast.example.com").rstrip("/")
+AUDIO_BASE = {l: os.environ.get(f"AUDIO_BASE_{l.upper()}", "").rstrip("/") for l in ("de", "en")}   # optional: serve the audio files from another host (small players that cannot reach the home server)
 hist = json.loads((ROOT / "history.json").read_text()) if (ROOT / "history.json").exists() else []
 KEEP_DAYS = 3
 if len(hist) > KEEP_DAYS:   # one entry per day: drop the older ones and delete their audio, art and icons
@@ -34,6 +35,8 @@ META = {
         "Calm bedtime stories for little children, new every evening - with a breathing exercise and told twice.", "en")}
 FORMAT = {"de": "Aufbau: Atemübung, die Geschichte, danach noch einmal langsamer. Dauer etwa {m} Minuten. Geeignet für Kinder {stage}.",
           "en": "Format: breathing exercise, the story, then the story again, slower. About {m} minutes long. Suited to children aged {stage}."}
+AI_NOTE = {"de": "Hinweis: Die Geschichte wird von einer KI geschrieben und von einer KI-generierten Stimme erzählt. Auch die Musik und die Bilder sind KI-generiert.",
+           "en": "Note: the story is written by an AI and read by an AI-generated voice. The music and the pictures are also AI-generated."}
 for lang, (title, desc, sub, code) in META.items():
     items = []
     for h in reversed(hist):
@@ -41,9 +44,10 @@ for lang, (title, desc, sub, code) in META.items():
         if not e: continue
         d = dt.datetime.fromisoformat(h["date"] + "T18:00:00+01:00")
         body = (e.get('blurb') or e['description']) + "\n\n" + FORMAT[lang].format(m=max(1, round(e['seconds'] / 60)), stage=e.get('stage', h.get('stage', '')).replace('Jahre', 'Jahren') if lang == 'de' else e.get('stage', h.get('stage', '')).replace('Jahre', 'years'))
+        body += "\n\n" + AI_NOTE[lang]
         items.append(f"""<item><title>{html.escape(e['title'])}</title><description>{html.escape(body)}</description><itunes:subtitle>{html.escape((e.get('blurb') or e['description'])[:200])}</itunes:subtitle><itunes:summary>{html.escape(body)}</itunes:summary>
-<pubDate>{email.utils.format_datetime(d)}</pubDate><guid isPermaLink="false">mondlicht-{lang}-{h['date']}-{h['n']}</guid>
-<enclosure url="{BASE}/{lang}/episodes/{e['file']}" length="{e['bytes']}" type="audio/mpeg"/>
+<pubDate>{email.utils.format_datetime(d)}</pubDate><guid isPermaLink="false">mondlicht-{lang}-{e['file'][:-4]}{'-ext' if AUDIO_BASE[lang] else ''}</guid>
+<enclosure url="{(AUDIO_BASE[lang] + '/' + lang) if AUDIO_BASE[lang] else (BASE + '/' + lang)}/episodes/{e['file']}" length="{e['bytes']}" type="audio/mpeg"/>
 <itunes:image href="{BASE}/{lang}/episodes/{e['file'][:-4]}.jpg"/><itunes:duration>{e['seconds']}</itunes:duration><itunes:episode>{h['n']}</itunes:episode><itunes:explicit>false</itunes:explicit></item>""")
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel>

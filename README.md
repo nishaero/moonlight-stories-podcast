@@ -34,6 +34,16 @@ Settings through environment variables: `QWEN_REF`, `QWEN_SLOW` (extra slow-down
 ## Publishing the feed
 Serve `public/` over HTTPS at a stable URL (see `docker-compose.example.yml`) and give players `https://<your-host>/de/feed.rss` and `https://<your-host>/en/feed.rss`. Some podcast fetchers cannot pass bot-protection pages, so do not put a login or JavaScript challenge in front of the feed paths. Run daily with a systemd timer (`mondlicht-podcast.service.example`).
 
+
+## Quality gate and daily operation
+Every episode is built into `staging/<date>/` and published only after `qc.py` passes (loudness and peak, dead air and clicks, two listen-backs with Whisper of the clean voice track and of the finished mp3, steady voice, an LLM judge on the script, safety, title spelling, privacy). Failures are repaired automatically (up to 4 tries): normalise, de-click, trim silences, quieter music, re-record only the bad passages with a new take, rewrite the story, correct metadata. `MANUAL_APPROVAL=1` holds even passing episodes until `python publish.py` (or `--reject`). `rebuild.py` and `recheck.py` re-run mixing and the gate from cached voice takes.
+
+## Notes for small players such as the Yoto Mini
+- Serve the feed and audio over HTTPS with an RSA certificate and a short chain; plain 128 kbps stereo MP3 without an embedded picture streams fine.
+- A device on an isolated (IoT/guest) Wi-Fi may not reach your own public address through the router (NAT loopback). Put it on the main network or host the audio elsewhere.
+- Podcast apps and players cache by episode GUID and URL: when you rename files, remove and re-add the podcast in the player.
+- AI-generated shows: Apple Podcasts asks for disclosure in the content and metadata; `feed.py` adds a note to every episode and the spoken intro says it.
+
 ## Privacy and safety
 - The child's name and birth date live only in `child.json` (git-ignored, mode 600 recommended); stories never contain a surname, address or other details.
 - Everything runs locally; the only outbound traffic is downloading models and serving your feed.

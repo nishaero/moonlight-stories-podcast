@@ -16,6 +16,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent
 WORK = ROOT / "work"
 PUB = ROOT / "public"
+STAGE = ROOT / "staging"   # finished episodes wait here until the quality gate (qc.py) has passed
 HIST = ROOT / "history.json"
 CHILD = ROOT / "child.json"          # {"birthdate": "YYYY-MM-DD", "name": null}  (private, chmod 600, never published)
 DIALECT = os.environ.get("DIALECT_DE", "")      # "" = standard German (default). "hessisch" = mild Hessian colour in the German feed (kept as an option, not used)
@@ -28,8 +29,8 @@ HESS_FIXED = dict(   # mild Hessian colour: standard German with a few local tou
     bye="Die Geschichte is aus. Du hast es so schön warm und weich. Schlaf gut. Bis morgen Abend. Gut Nacht.")
 HESS_TITLE_LINE = "Heut erzähl ich dir die Geschichte: {title}."
 ENGINE = os.environ.get("TTS", "qwen")            # qwen = Qwen3-TTS voice clone of the chosen reference (GPU); xtts = XTTS-v2 (CPU)
-QWEN_REF = os.environ.get("QWEN_REF", "E3_expressiv")
-QWEN_SLOW = float(os.environ.get("QWEN_SLOW", "0.78"))   # extra slow-down on top of the stage speed (the clone speaks ~4.2 syll/s, bedtime wants ~3.5)
+QWEN_REF = os.environ.get("QWEN_REF", "C_erzaehlerin")      # the voice of the first episode ("Der schaukelnde Kutter") that was chosen for its voice and modulation
+QWEN_SLOW = float(os.environ.get("QWEN_SLOW", "0.82"))   # extra slow-down on top of the stage speed (the clone speaks ~4.2 syll/s, bedtime wants ~3.5)
 VOICE = os.environ.get("VOICE", "Nova Hogarth") if ENGINE == "xtts" else "qwen-" + QWEN_REF
 OLLAMA = os.environ.get("OLLAMA", "http://localhost:11434")
 MODEL = os.environ.get("MODEL", "qwen3.8:27b")
@@ -39,7 +40,7 @@ TARGET_LUFS = -20.0
 LANG = {
     "de": dict(show="Mondlichtgeschichten", xtts="de", sub="zum Einschlafen",
                fixed=dict(
-                   hello="Willkommen bei den Mondlichtgeschichten. Es ist Zeit, dich ganz groß zu strecken, es dir gemütlich zu machen und den Tag loszulassen.",
+                   hello="Willkommen bei den Mondlichtgeschichten. Diese Geschichte wurde mit Hilfe von KI geschrieben, und eine KI-Stimme erzählt sie dir. Es ist Zeit, dich ganz groß zu strecken, es dir gemütlich zu machen und den Tag loszulassen.",
                    breath="Mach das Licht aus und kuschle dich in dein Bett. Wir atmen zusammen tief ein, durch die Nase. Und langsam wieder aus, durch den Mund. Spür, wie sich dein Bauch hebt und senkt. Noch einmal tief ein. Und ganz langsam aus.",
                    relaxed="Wunderbar. Jetzt bist du ganz entspannt.",
                    twice="Ich erzähle dir die Geschichte zweimal. Beim zweiten Mal erzähle ich noch langsamer, und du darfst dabei einschlafen. Schließ die Augen. Los geht's.",
@@ -48,7 +49,7 @@ LANG = {
                title_line="Heute erzähle ich dir die Geschichte: {title}."),
     "en": dict(show="Moonlight Stories", xtts="en", sub="bedtime stories",
                fixed=dict(
-                   hello="Welcome to Moonlight Stories. It's time to give a big stretch, snuggle down, and let go of the day.",
+                   hello="Welcome to Moonlight Stories. This story was written with the help of AI, and an AI voice is telling it to you. It's time to give a big stretch, snuggle down, and let go of the day.",
                    breath="Turn off the light and cuddle into your bed. Let's take a deep breath together, in through your nose. And slowly out through your mouth. Feel your tummy rise and fall. One more deep breath in. And very slowly out.",
                    relaxed="Wonderful. Now you are all relaxed.",
                    twice="I will tell you the story twice. The second time I will tell it even slower, and you can drift off to sleep as you listen. Close your eyes. Here we go.",
@@ -103,6 +104,18 @@ def log(*a):
 
 
 # ------------------------------------------------------------------ story (German master, then English translation)
+STRUCTURES = {   # story shapes kids love: each gives the tale a hook, a pattern and a small surprise
+    "Sammelgeschichte": "Die Hauptfigur trifft nacheinander drei Freunde. Jeder bringt etwas Besonderes mit (jedes Mal mit einem lustigen Geräusch), und am Ende passt alles zusammen. Ein kurzer Refrain kehrt dreimal wieder.",
+    "Kleine Suche": "Etwas Wichtiges ist weg. Die Figur sucht an drei Orten; jeder Ort gibt einen lustigen Hinweis (ein Geräusch, eine Spur, ein Freund). Beim dritten Ort wird es gefunden, und alle freuen sich.",
+    "Überraschender Besuch": "Ein winziger, unerwarteter Gast taucht auf, und niemand weiß, warum. Die Figur rät dreimal falsch (lustig), dann kommt die liebe Wahrheit heraus.",
+    "Warum-Geschichte": "Ein kleines Kind fragt, warum etwas so ist (zum Beispiel warum der Mond mal klein, mal groß ist, warum Igel stachelig sind). Die Geschichte erklärt es fantasievoll, liebevoll und mit einem Augenzwinkern.",
+    "Kleiner Mut": "Die Figur möchte etwas Kleines schaffen, das sie sich noch nicht traut. Zwei Versuche gehen lustig daneben, beim dritten klappt es mit Hilfe eines Freundes, und alle sind stolz.",
+    "Geheimnis im Garten": "Ein neues, geheimnisvolles Geräusch oder eine Spur ist da. Die Figur und ein Freund gehen neugierig nachsehen. Die Auflösung ist überraschend, freundlich und lustig.",
+    "Tauschgeschichte": "Die Figur braucht etwas und tauscht mit drei Freunden hin und her (jedes Mal ein Spaß). Am Ende hat jeder genau das, was er braucht, und noch eine Umarmung dazu.",
+    "Kleine Reise": "Die Figur oder ein Fahrzeug fährt, läuft oder fliegt zu einem Ziel und erlebt unterwegs drei kleine Begegnungen mit je einem eigenen Geräusch oder Lied. Am Ziel wartet etwas Schönes.",
+}
+
+
 def style_de(st, name):
     namerule = (f"Die Hauptfigur oder das Kind in der Du-Geschichte heißt {name}." if name else "Gib der Hauptfigur einen kurzen, schönen Namen oder erzähle in der Du-Form.")
     return f"""Du bist eine erfahrene Autorin von Einschlafgeschichten für kleine Kinder (Altersstufe: {st['label']}). Dein Stil ist der von „Yoto Dreams“ und „Lumi“: sehr ruhig, warm, langsam, voller sanfter Sinneseindrücke (Licht, Wärme, weiche Stoffe, leise Geräusche, Gerüche), ohne Spannung und ohne Handlungssprünge.
@@ -114,8 +127,10 @@ Regeln:
 - Nichts Gruseliges, keine Bösewichte, keine Gefahr, kein Streit, keine Eile, keine Bildschirme, keine Marken, keine Werbung.
 - Zahlen ausschreiben, keine Abkürzungen, keine englischen Wörter, keine Aufzählungen, keine Überschriften im Text.
 - Aufbau in sechs bis acht kurzen Absätzen (Leerzeile dazwischen): 1) Ort und Figur, 2) ein kleiner Wunsch oder eine kleine Aufgabe, 3) und 4) gemeinsam tun, was das Thema verlangt (das Thema muss wirklich vorkommen und gelingen), 5) Ruhe und Gefühle, 6) und 7) Müdigkeit, Einkuscheln, Einschlafen.
+- Sie muss SPANNEND UND LUSTIG sein, nicht nur ruhig: Der erste Satz weckt Neugier (eine kleine Frage, ein seltsames Geräusch, ein Wunsch). Die Hauptfigur will etwas ganz Bestimmtes und hat eine kleine Eigenart (zum Beispiel niest sie, wenn sie aufgeregt ist, oder sie summt immer dasselbe Lied). Es gibt eine Dreierfolge, bei der es jedes Mal etwas lustiger wird, einen kleinen Refrain, den Kinder mitsprechen können, einen Moment zum Schmunzeln und eine kleine Überraschung im letzten Drittel. Die Spannung ist nur kindgerecht klein (kein Streit, keine echte Gefahr) und löst sich liebevoll auf. Erst dann wird alles langsam ruhig und müde. Konkrete, bunte Einzelheiten statt allgemeiner Worte.
 - Die Geschichte hat einen kleinen, nachvollziehbaren Kern, den ein Kind in diesem Alter kennt und versteht: ein kleines Gefühl oder Problem (zum Beispiel vermissen, Angst vor dem Dunkeln, teilen, mutig sein, etwas Neues probieren, etwas suchen) und eine liebe Lösung durch Freundschaft, Trost, Geduld oder Mut. Klarer Anfang, Mitte und Ende; alles muss logisch zusammenhängen. Nur Dinge, die ein dreijähriges Kind aus seinem Alltag kennt (Tiere, Fahrzeuge, Kuscheltiere, Familie, Essen, Bad, Wetter), keine abstrakten oder poetisch-rätselhaften Bilder. Das Thema ist die Handlung, nicht nur die Kulisse. Die Hauptfigur hat einen Namen.
 - Jeder Satz sagt etwas Klares und Schönes. Keine seltsamen Vergleiche (nichts Kaltes, Hartes oder Scharfes), keine Widersprüche. Das Wort "leise" höchstens fünfmal.
+- SCHREIBE WIE MAN SPRICHT, nicht wie ein Buch: gesprochenes, warmes Deutsch mit kurzen Nebensätzen, kleinen Füllwörtern und Abtönungspartikeln (ja, doch, mal, na, nun, schon, eben, so), Ausrufen (Ach! Oh! Mmh!), unvollständigen Sätzen („Ganz weich. Ganz warm.“), Wiederholungen („und dann, und dann …“) und einem kleinen Nachsatz („…, der Igel“). Keine langen Schachtelsätze, keine Schriftsprache wie „sodann“, „indes“, „jedoch“. Wörtliche Rede in „…“.
 - Lebendig wie eine echte Erzählerin, die einem Kind auf dem Schoß vorliest: spreche das Kind ab und zu direkt an („Weißt du, was er da sah?“, „Na, hörst du das?“), stelle kleine Fragen und beantworte sie gleich, baue wörtliche Rede ein (die Figuren sagen kurze, liebe Sätze), nutze Klangwörter (Plitsch, Platsch, Schschsch, Mmmh, Hui) und wechsle die Satzlänge: manche Sätze nur zwei oder drei Wörter, andere etwas länger. Gelegentlich ein Ausruf („Oh!“) oder ein geflüstertes Geheimnis („Pssst…“).
 - Ruhiger Rhythmus: sanfte Wiederholungen; Bilder, die langsam kleiner, weicher und leiser werden.
 - Das Ende: die Hauptfigur (oder das Du) wird ganz müde, kuschelt sich ein und schläft ein. Die letzten Sätze werden immer kürzer und leiser.
@@ -144,6 +159,25 @@ def ollama(system, user, temp=0.8, num_predict=3500):
         return json.loads(r.read())["message"]["content"].strip()
 
 
+def ollama_unload():
+    """free the GPU memory of the story model before the voice runs: two heavy models on this one integrated GPU at the same time can wedge it (it did, twice)"""
+    try:
+        urllib.request.urlopen(urllib.request.Request(OLLAMA + "/api/generate", json.dumps({"model": MODEL, "keep_alive": 0}).encode(), {"Content-Type": "application/json"}), timeout=60).read()
+    except Exception as e:
+        log("ollama unload failed:", str(e)[:80])
+
+
+def tts_unload():
+    """release the voice model so the story/judge model can use the GPU alone"""
+    global _qwen, _tts
+    _qwen = None; _tts = None
+    try:
+        import gc, torch
+        gc.collect(); torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 def clean_text(t):
     t = re.sub(r"[*_#>`]+", "", t).replace("…", "...").replace("–", ", ").replace("—", ", ")
     return re.sub(r"\s+\n", "\n", t).strip()
@@ -165,12 +199,13 @@ def words_out(paras, table):
     return [re.sub(r"\d+", lambda x: table[int(x.group())] if int(x.group()) < len(table) else x.group(), p) for p in paras]
 
 
-def make_story_de(theme, recent, st, name, short, form):
+def make_story_de(theme, recent, st, name, short, form, structure=None):
     mode = form or ("du" if dt.date.today().toordinal() % 2 else "figur")
     form_txt = ("Erzähle als sanfte Traumreise in der Du-Form (\"du spürst, du hörst ...\")." if mode == "du"
                 else "Erzähle von einer sanften Hauptfigur und einem freundlichen Begleiter.")
     lo, hi = (90, 220) if short else st["words"]
-    user = f"Thema: {theme}.\n{form_txt}\nLänge: zwischen {lo} und {hi} Wörtern.\nVermeide diese schon erzählten Titel: {', '.join(recent[-12:]) or 'keine'}."
+    shape = f"\nGeschichtenform \"{structure}\": {STRUCTURES[structure]}" if structure else ""
+    user = f"Thema: {theme}.{shape}\n{form_txt}\nLänge: zwischen {lo} und {hi} Wörtern.\nVermeide diese schon erzählten Titel: {', '.join(recent[-12:]) or 'keine'}."
     for attempt in range(4):
         p = parse(ollama(style_de(st, name), user, temp=0.8 + 0.04 * attempt), ("TITEL", "BESCHREIBUNG", "GESCHICHTE"))
         if not p:
@@ -184,6 +219,7 @@ def make_story_de(theme, recent, st, name, short, form):
         ok = lo * 0.85 <= n <= hi * 1.2 and not english and longest <= st["sent"] + 8
         log(f"story attempt {attempt+1}: {n} words (want {lo}-{hi}), longest sentence {longest}, ok={ok}")
         if ok:
+            paras = interest_pass(title, paras, theme, st)
             paras = edit_pass(title, paras, theme, st)
             return dict(title=title, description=desc, paragraphs=paras, words=len(' '.join(paras).split()), mode=mode)
     raise SystemExit("no acceptable German story from the model")
@@ -197,6 +233,39 @@ def regroup(paras):
     sents = [x for p in paras for x in re.split(r"(?<=[.!?])\s+", p) if x]
     k = max(4, round(len(sents) / 7))
     return [" ".join(sents[i:i + k]) for i in range(0, len(sents), k)]
+
+
+def interest_pass(title, paras, theme, st):
+    """a critic scores how interesting the story is for a small child (hook, character, surprise, humour, pattern); weak stories are rewritten once or twice, the best version wins"""
+    crit = ("Du bist eine strenge Kinderbuch-Lektorin. Bewerte die Einschlafgeschichte für ein Kind dieser Altersstufe: " + st["label"] + ". "
+            "Kriterien (je 0 bis 10): Einstieg weckt Neugier; Hauptfigur mit Wunsch und Eigenart; Dreierfolge oder Refrain zum Mitsprechen; Moment zum Schmunzeln; kleine Überraschung; klarer Anfang, Mitte, Ende. "
+            "Antworte genau so: SCORE: <Durchschnitt 0-10>\nSCHWACH: <die zwei schwächsten Punkte, ein Satz>")
+    def rate(ps):
+        r = ollama(crit, "\n\n".join(ps), temp=0.1, num_predict=200)
+        m = re.search(r"SCORE:\s*([0-9]+(?:[.,][0-9])?)", r); w = re.search(r"SCHWACH:\s*(.+)", r)
+        return (float(m.group(1).replace(",", ".")) if m else 7.0), (w.group(1).strip() if w else "")
+    try:
+        best, (best_score, weak) = paras, rate(paras)
+        log(f"interest score {best_score}: {weak[:120]}")
+        for k in range(2):
+            if best_score >= 8.0:
+                break
+            sysmsg = ("Du bist Autorin von Einschlafgeschichten für Kleinkinder. Mach die Geschichte SPANNENDER, LUSTIGER und lebendiger, ohne sie unruhig oder gefährlich zu machen. "
+                      f"Das sind die Schwächen: {weak} Baue gezielt ein: einen neugierig machenden ersten Satz; eine Figur mit Wunsch und kleiner Eigenart; eine Dreierfolge, bei der es jedes Mal lustiger wird; "
+                      "einen kurzen Refrain; einen Moment zum Schmunzeln; eine kleine, liebe Überraschung im letzten Drittel. Danach wird es langsam ruhig und müde, und die Figur schläft ein. "
+                      f"Behalte das Thema \"{theme}\", die Absätze (Leerzeilen), die Länge (±15 Prozent) und kurze, einfache Sätze (höchstens {st['sent']} Wörter, keine englischen Wörter). "
+                      "Gib NUR den neuen Text aus, ohne Titel und Kommentar.")
+            new = [p.strip().replace("\n", " ") for p in re.split(r"\n\s*\n", clean_text(ollama(sysmsg, "\n\n".join(best), temp=0.7 + 0.1 * k))) if p.strip()]
+            new = regroup(words_out(new, NUM_DE))
+            n0, n1 = len(" ".join(paras).split()), len(" ".join(new).split())
+            longest = max((len(x.split()) for q in new for x in re.split(r"(?<=[.!?])\s+", q)), default=0)
+            if not (0.8 * n0 <= n1 <= 1.3 * n0) or re.search(r"\b(the|and|with)\b", " ".join(new), re.I) or longest > st["sent"] + 8:
+                log(f"interest rewrite {k+1} rejected (words {n1}, longest sentence {longest})"); continue
+            sc, wk = rate(new); log(f"interest rewrite {k+1}: score {sc} ({n0} -> {n1} words)")
+            if sc > best_score: best, best_score, weak = new, sc, wk
+        return best
+    except Exception as e:
+        log("interest pass failed:", str(e)[:80]); return paras
 
 
 def edit_pass(title, paras, theme, st):
@@ -278,8 +347,9 @@ def episode_blurb(story, lang, st):
 def scene_prompts(story):
     """two English lines for the image generator: a calm picture-book scene, and one simple object for a 16x16 pixel icon"""
     ans = ollama("You write prompts for an image generator for a children's bedtime story. Answer with exactly two lines. "
-                 "Line 1: one concrete picture-book scene in English (main animal or object, setting, soft night light), no people faces, no text. "
-                 "Line 2: ONE simple object for a tiny pixel icon, 3 to 5 words, e.g. 'a white snow hare'.",
+                 "The picture MUST show the main character named in the story TITLE (if the title is 'The humming pig', the picture shows a pig, not another animal from the story). "
+                 "Line 1: one concrete picture-book scene in English (that main character in a gentle setting, soft night light), no people faces, no text. "
+                 "Line 2: ONE simple object for a tiny pixel icon that shows the same main character, 3 to 5 words, e.g. 'a pink sleeping pig'.",
                  f"Title: {story['title']}\n" + " ".join(story["paragraphs"])[:1500], temp=0.5, num_predict=120)
     lines = [l.strip(" -*0123456789.:") for l in ans.splitlines() if l.strip()]
     lines = [re.sub(r"^(line \d+:?)", "", l, flags=re.I).strip() for l in lines]
@@ -350,8 +420,11 @@ def hear(wav, lang):
     return json.loads(body)["text"] if body else ""
 
 
+FILLER_TOKENS = {"äh", "ähm", "ehm", "hm", "hmm", "mhm", "mmh", "mh", "öh", "um", "uh", "er", "uhm", "mm", "mmm"}
+
+
 def _norm(t):
-    return re.sub(r"[^a-zäöüß ]", "", t.lower()).split()
+    return [w for w in re.sub(r"[^a-zäöüß ]", "", t.lower()).split() if w not in FILLER_TOKENS]
 
 
 _qwen = None
@@ -374,7 +447,7 @@ def say_once(text, lang, speed, seed):
     torch.manual_seed(seed)
     if ENGINE == "qwen":
         m, prompt = qwen_model()
-        w, sr = m.generate_voice_clone(text=text, language={"de": "German", "en": "English"}[lang], voice_clone_prompt=prompt, temperature=1.0, top_k=60, top_p=0.97)
+        w, sr = m.generate_voice_clone(text=text, language={"de": "German", "en": "English"}[lang], voice_clone_prompt=prompt, **({"temperature": 1.0, "top_k": 60, "top_p": 0.97} if os.environ.get("QWEN_HOT") == "1" else {}))
         w = np.asarray(w[0], dtype=np.float32)
         if sr != SR:
             import librosa; w = librosa.resample(w, orig_sr=sr, target_sr=SR)
@@ -386,12 +459,33 @@ def say_once(text, lang, speed, seed):
 
 
 STATS = {"chunks": 0, "retries": 0, "gave_up": 0}
+SALTS_FILE = WORK / "salts.json"
+
+
+def _salts():
+    try: return json.loads(SALTS_FILE.read_text())
+    except Exception: return {}
+
+
+def salt_key(lang, text):
+    return hashlib.md5((lang + "|" + text).encode()).hexdigest()[:12]
+
+
+def bump_salt(lang, text):
+    """make the next build re-record this passage with a different random take (the auto-repair uses this)"""
+    d = _salts(); k = salt_key(lang, text); d[k] = d.get(k, 0) + 1
+    WORK.mkdir(exist_ok=True); SALTS_FILE.write_text(json.dumps(d))
 
 
 def say(text, lang, speed, verify=True):
-    """synthesize, listen back with Whisper, and re-record (different random seed) when the take does not match the text"""
+    """synthesize, listen back with Whisper, and re-record (different random seed) when the take does not match the text; takes are cached per passage"""
     import difflib
-    base = int(hashlib.md5((lang + text).encode()).hexdigest()[:8], 16)
+    salt = _salts().get(salt_key(lang, text), 0)
+    cdir = WORK / "chunks" / lang; cdir.mkdir(parents=True, exist_ok=True)
+    cfile = cdir / (hashlib.md5(f"{VOICE}|{lang}|{text}|{salt}|{QWEN_SLOW}|{speed}".encode()).hexdigest() + ".npy")
+    if verify and cfile.exists():
+        return np.load(cfile)
+    base = int(hashlib.md5((lang + text + str(salt)).encode()).hexdigest()[:8], 16)
     best, best_score = None, -1
     dial = lang == "de" and DIALECT == "hessisch"   # Whisper writes dialect speech in standard German, and the text is mostly standard German with a few local words, so the bar is only slightly lower
     for attempt in range(4 if verify else 1):
@@ -407,6 +501,7 @@ def say(text, lang, speed, verify=True):
     STATS["chunks"] += 1
     if best_score < (0.70 if dial else 0.80):
         STATS["gave_up"] += 1; log(f"  !! weak take ({best_score:.2f}): {text[:60]}")
+    np.save(cfile, best)
     return best
 
 
@@ -429,15 +524,21 @@ def chunks_of(par):
 
 
 def read_paragraphs(paras, lang, st, label):
-    out = []; total = sum(len(chunks_of(p)) for p in paras); k = 0
-    for p in paras:
+    """returns (audio, spans): spans[i] = dict(par, start, end, chunks=[(text, start_sample)]) so sound effects can follow the story"""
+    out = []; total = sum(len(chunks_of(p)) for p in paras); k = 0; pos = 0; spans = []
+    def put(x):
+        nonlocal pos
+        out.append(x); pos += len(x)
+    for i, p in enumerate(paras):
+        sp = dict(par=i, start=pos, chunks=[])
         for c in chunks_of(p):
-            k += 1
-            out += [say(c, lang, st["speed"]), silence(random.Random(k).uniform(0.85, 1.15) * st["pause"])]
+            k += 1; sp["chunks"].append((c, pos))
+            put(say(c, lang, st["speed"])); put(silence(random.Random(k).uniform(0.85, 1.15) * st["pause"]))
             if k % 5 == 0 or k == total:
                 log(f"  {lang} {label}: {k}/{total} chunks, retries so far {STATS['retries']}")
-        out.append(silence(1.8))
-    return np.concatenate(out)
+        sp["end"] = pos; spans.append(sp)
+        put(silence(1.8))
+    return np.concatenate(out), spans
 
 
 def tempo(wav, factor):
@@ -480,20 +581,75 @@ def fixed_parts(lang, title):
     return fx
 
 
-def build(story, lang, st):
+def trim_silences(w, max_s=2.6):
+    """cut silent stretches in the voice longer than max_s down to max_s (a take that left a hole)"""
+    fr = int(SR * 0.05); n = len(w) // fr
+    rms = np.sqrt((w[:n * fr].reshape(n, fr) ** 2).mean(axis=1)); quiet = rms < 0.004
+    keep = np.ones(n, dtype=bool); run = 0
+    for i in range(n):
+        run = run + 1 if quiet[i] else 0
+        if run > max_s / 0.05: keep[i] = False
+    return np.concatenate([w[i * fr:(i + 1) * fr] for i in range(n) if keep[i]] + [w[n * fr:]])
+
+
+def sfx_layers(spans, paras, marks, n, tempo2, lang, second=True):
+    """ambience that matches each part of the story (rain, water, night ...) plus short cues on sound words (splash, owl, purr ...). ambience layer, cue layer."""
+    import sfx
+    amb = np.zeros(n, dtype=np.float32); cue = np.zeros(n, dtype=np.float32)
+    f0 = int(marks["first"] * SR); s0 = int(marks["second"] * SR)
+    runs = []   # merge consecutive paragraphs with the same ambience
+    for sp in spans:
+        k = sfx.ambience_for(paras[sp["par"]])
+        if runs and runs[-1][0] == k and k: runs[-1][2] = sp["end"]
+        else: runs.append([k, sp["start"], sp["end"]])
+    for gi, (k, a, b) in enumerate(runs):
+        if not k: continue
+        for base, scale, lvl, fade in ((f0, 1.0, 1.0, 2.5),) + (((s0, 1.0 / tempo2, 0.55, 4.0),) if second else ()):
+            st_, en_ = base + int(a * scale), base + int(b * scale)
+            seg = sfx.ambience(k, (en_ - st_) / SR + 3.0, seed=gi + 1 + (7 if base == s0 else 0), fade=fade) * lvl
+            p0 = max(0, st_ - int(1.5 * SR)); e = min(n, p0 + len(seg)); amb[p0:e] += seg[: e - p0]
+    last = -99.0; count = 0
+    for sp in spans:       # cues only in the first reading, at most one every 15 s
+        for text, start in sp["chunks"]:
+            kinds = sfx.cues_for(text)
+            t = (f0 + start) / SR
+            if kinds and t - last > 15 and count < 8:
+                x = sfx.CUES[kinds[0]](seed=count + 1); p = int(t * SR + 0.4 * SR); e = min(n, p + len(x)); cue[p:e] += x[: e - p]; last = t; count += 1
+    return amb, cue
+
+
+def intimate(w):
+    """close-microphone warmth for a bedtime voice: a little low-end (proximity effect), softer sibilance and top end, gentle compression"""
+    import soundfile as sf
+    a, b = WORK / "fx_in.wav", WORK / "fx_out.wav"
+    sf.write(a, w, SR)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(a), "-af",
+                    "equalizer=f=150:t=q:w=0.9:g=2.5,equalizer=f=4200:t=q:w=1.2:g=-2.5,highshelf=f=8500:g=-4,acompressor=threshold=0.09:ratio=2.2:attack=15:release=300:makeup=1.4", str(b)], check=True)
+    return sf.read(b, dtype="float32")[0]
+
+
+def build(story, lang, st, opts=None):
     """voice timeline with musical gaps; the music (theme, stingers, bed that ducks under the voice, outro) is generated by music.py"""
     import soundfile as sf
     import music
     from scipy.ndimage import uniform_filter1d
     fx = fixed_parts(lang, story.get("title_hess") or story["title"])
-    paras = story.get("paragraphs_hess") if (lang == "de" and DIALECT == "hessisch" and story.get("paragraphs_hess")) else story["paragraphs"]
+    paras = spoken_paragraphs(story, lang)
+    opts = opts or {}
     cache = WORK / f"first_{lang}.wav"
+    sidecar = WORK / f"first_{lang}.json"
     if os.environ.get("REUSE_FIRST") and cache.exists():
         first = sf.read(cache, dtype="float32")[0]
+        try: spans = json.loads(sidecar.read_text())
+        except Exception: spans = None
     else:
-        first = read_paragraphs(paras, lang, st, "first reading")
-        sf.write(cache, first, SR)
-    second = tempo(first, st["tempo"])
+        first, spans = read_paragraphs(paras, lang, st, "first reading")
+        if opts.get("trim"):
+            n0 = len(first); first = trim_silences(first); r = len(first) / max(n0, 1)   # keep the sound-effect timing in step (proportional)
+            for sp in spans:
+                sp["start"] = int(sp["start"] * r); sp["end"] = int(sp["end"] * r); sp["chunks"] = [(t, int(a * r)) for t, a in sp["chunks"]]
+        sf.write(cache, first, SR); sidecar.write_text(json.dumps(spans))
+    second = tempo(first, opts.get("tempo2") or st["tempo"])
     parts, marks, pos = [], {}, 0
 
     def add(name, x):
@@ -510,12 +666,15 @@ def build(story, lang, st):
     add("st2", silence(6.0))
     add("bye", fx["bye"]); add("g6", silence(1.5))
     add("outro", silence(16.0))
-    voice = np.concatenate(parts); voice = voice / max(np.abs(voice).max(), 1e-6) * 0.8
+    voice = np.concatenate(parts)
+    if os.environ.get("VOICE_FX", "0") == "1": voice = intimate(voice)
+    voice = voice / max(np.abs(voice).max(), 1e-6) * 0.8
+    sf.write(WORK / f"voice_{lang}.wav", voice, SR)   # clean voice track: the quality gate listens to it separately from the music mix
     total = len(voice) / SR
     # sidechain: music is quiet while the voice speaks and swells in the gaps
     env = uniform_filter1d(np.abs(voice), int(SR * 0.35)); mask = (env > 0.06 * np.percentile(env, 95)).astype(np.float32)
     duck = uniform_filter1d(mask, int(SR * 0.9)); duck = 1.0 - np.clip(duck, 0, 1)
-    gain = 0.09 + 0.26 * duck
+    gain = (0.09 + 0.26 * duck) * opts.get("music", 1.0)
     bed = music.bed(total, 0.5, seed=hash(lang + story["title"]) % 1000, tempo=0.9)
     sl = int(marks["second_ann"] * SR)   # quieter, sparser bed for the slow second reading
     bed2 = music.bed(total, 0.28, seed=5, tempo=1.3); bed[sl:] = bed2[sl:] * 0.8
@@ -523,6 +682,10 @@ def build(story, lang, st):
     a0 = int(marks["hello"] * SR); bed[a0:a0 + fin] *= np.linspace(0, 1, fin)
     out = np.zeros(len(voice), dtype=np.float32)
     out += bed * gain
+    if spans and os.environ.get("SFX", "1") == "1":
+        amb, cuel = sfx_layers(spans, paras, marks, len(voice), opts.get("tempo2") or st["tempo"], lang, opts.get("sfx2", True))
+        out += amb * (0.045 + 0.11 * duck) * opts.get("music", 1.0)
+        out += cuel * 0.5 * opts.get("music", 1.0)
     th = music.theme(16.0); out[:len(th)] += th * (0.35 + 0.25 * duck[:len(th)])
     for i, (key, var) in enumerate((("st0", 0), ("st1", 1), ("st2", 2))):
         x = music.stinger(float(5.5), var); p = int((marks[key] + 0.3) * SR); out[p:p + len(x)] += x[:len(out) - p] * 0.55
@@ -532,12 +695,21 @@ def build(story, lang, st):
     return mix
 
 
-def encode(lang, out_mp3, story, number, cover=None):
-    cover = cover or PUB / lang / "cover.jpg"; show = LANG[lang]["show"]
+def encode(lang, out_mp3, story, number, cover=None, opts=None):
+    """maximum-compatibility MP3 for small players (Yoto): CBR 128 kbps, 44.1 kHz stereo, plain ID3v2.3 text tags and NO picture inside the file (the cover lives in the RSS feed; some importers choke on a big embedded image)"""
+    opts = opts or {}; show = LANG[lang]["show"]
     cmd = ["ffmpeg", "-loglevel", "error", "-y", "-i", str(WORK / f"mix_{lang}.wav")]
-    if cover.exists():
+    cover = cover or PUB / lang / "cover.jpg"
+    embed = os.environ.get("EMBED_COVER") == "1" and cover.exists()
+    if embed:
         cmd += ["-i", str(cover), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-disposition:v", "attached_pic"]
-    cmd += ["-ac", "1", "-ar", "44100", "-codec:a", "libmp3lame", "-b:a", "96k", "-id3v2_version", "3", "-metadata", f"title={story['title']}",
+    else:
+        cmd += ["-map", "0:a", "-vn"]
+    flt = []
+    if opts.get("declick"): flt.append("adeclick")
+    if opts.get("norm"): flt.append("loudnorm=I=-20:TP=-1.5:LRA=11")
+    if flt: cmd += ["-af", ",".join(flt)]
+    cmd += ["-ac", "2", "-ar", "44100", "-codec:a", "libmp3lame", "-b:a", "128k", "-id3v2_version", "3", "-write_id3v1", "1", "-metadata", f"title={story['title']}",
             "-metadata", f"artist={show}", "-metadata", f"album={show}", "-metadata", f"track={number}", "-metadata", f"comment={story['description']}", str(out_mp3)]
     subprocess.run(cmd, check=True)
 
@@ -577,6 +749,203 @@ def slug(date, title):
     return f"{date}-{re.sub(r'[^a-z0-9]+', '-', t).strip('-')}"
 
 
+FILLERS = {"de": ["Ähm, ", "Na, ", "Hmm, ", "Also, ", "Naja, ", "Äh, "], "en": ["Um, ", "Well, ", "Hmm, ", "So, ", "Uh, ", "You know, "]}
+MID_FILLERS = {"de": ["ähm", "äh", "na ja"], "en": ["um", "uh", "you know"]}
+NO_FILLER_START = re.compile(r"^(ach|oh|na|hmm|mmm|mmh|psst|pssst|uh|um|well|so|ähm|äh|naja|also|ja|doch|aha|ssch|schsch|aaah|\W)", re.I)
+
+
+def add_fillers(paras, lang, seed, per_words=None):
+    """a real storyteller hesitates a little: sprinkle spoken fillers (ähm, na, hmm / um, well, hmm) at sentence starts and now and then after a comma. Deterministic per story, never in the first paragraph's first sentence."""
+    per_words = per_words or float(os.environ.get("FILLER_EVERY", "0"))
+    if per_words <= 0:
+        return list(paras)
+    rng = random.Random(seed); out = []; since = 0; first = True
+    for p in paras:
+        sents = re.split(r"(?<=[.!?…])\s+", p.strip()); new = []
+        for i, sen in enumerate(sents):
+            n = len(sen.split()); done = False
+            if not (first and i == 0) and n >= 4 and not NO_FILLER_START.match(sen) and not sen.startswith(("„", '"')) and since >= per_words * rng.uniform(0.6, 1.3):
+                if rng.random() < 0.25 and "," in sen[: len(sen) // 2]:
+                    k = sen.index(",") + 1; sen = sen[:k] + " " + rng.choice(MID_FILLERS[lang]) + "," + sen[k:]
+                else:
+                    f = rng.choice(FILLERS[lang]); sen = f + sen[0].lower() + sen[1:] if not re.match(r"^[A-ZÄÖÜ][A-ZÄÖÜ]", sen) else f + sen
+                since = 0; done = True
+            if not done: since += n
+            new.append(sen)
+        first = False; out.append(" ".join(new))
+    return out
+
+
+def spoken_paragraphs(story, lang):
+    hess = lang == "de" and DIALECT == "hessisch" and story.get("paragraphs_hess")
+    paras = story["paragraphs_hess"] if hess else story["paragraphs"]
+    return add_fillers(paras, lang, seed=hashlib.md5((story["title"] + lang).encode()).hexdigest())
+
+
+def script_segments(story, lang, st):
+    """the episode script as ordered parts: (kind, index, text). kind: fixed | title | para1 (first reading) | para2 (slow second reading)"""
+    hess = lang == "de" and DIALECT == "hessisch"
+    fixed = HESS_FIXED if hess else LANG[lang]["fixed"]
+    paras = spoken_paragraphs(story, lang)
+    title = story.get("title_hess") or story["title"]
+    tl = (HESS_TITLE_LINE if hess else LANG[lang]["title_line"]).format(title=title)
+    segs = [("fixed", "hello", fixed["hello"]), ("fixed", "breath", fixed["breath"]), ("fixed", "relaxed", fixed["relaxed"]), ("title", "title", tl), ("fixed", "twice", fixed["twice"])]
+    segs += [("para1", i, p) for i, p in enumerate(paras)] + [("fixed", "second", fixed["second"])] + [("para2", i, p) for i, p in enumerate(paras)] + [("fixed", "bye", fixed["bye"])]
+    return segs
+
+
+def expected_script(story, lang, st):
+    """the exact words the finished episode should contain (used by the quality gate to listen back to the final mp3)"""
+    return " ".join(t for _, _, t in script_segments(story, lang, st))
+
+
+def _env_file(path):
+    try:
+        for l in Path(path).expanduser().read_text().splitlines():
+            if "=" in l and not l.startswith("#"):
+                k, v = l.split("=", 1); os.environ.setdefault(k.strip(), v.strip().strip('"'))
+    except Exception:
+        pass
+
+
+def notify(title, msg):
+    """ntfy-style POST (NTFY_URL) or a Home Assistant notify service (HA_URL + HA_TOKEN, NOTIFY_SERVICE); never raises"""
+    try:
+        _env_file(os.environ.get("NOTIFY_ENV_FILE", ""))
+        if os.environ.get("NTFY_URL"):
+            urllib.request.urlopen(urllib.request.Request(os.environ["NTFY_URL"], msg.encode(), {"Title": title.encode("ascii", "ignore").decode() or "podcast"}), timeout=15)
+        elif os.environ.get("HA_URL") and os.environ.get("HA_TOKEN"):
+            svc = os.environ.get("NOTIFY_SERVICE", "notify.notify").replace(".", "/")
+            urllib.request.urlopen(urllib.request.Request(os.environ["HA_URL"].rstrip("/") + "/api/services/" + svc, json.dumps({"title": title, "message": msg}).encode(),
+                                   {"Authorization": "Bearer " + os.environ["HA_TOKEN"], "Content-Type": "application/json"}), timeout=15)
+    except Exception as e:
+        log("notify failed:", str(e)[:80])
+
+
+def publish(day_dir):
+    """move a staged, quality-checked episode into public/, add it to the history and rebuild the feeds"""
+    import shutil
+    entry = json.loads((day_dir / "entry.json").read_text())
+    hist = json.loads(HIST.read_text()) if HIST.exists() else []
+    for l in ("de", "en"):
+        if l not in entry: continue
+        for sub in ("episodes", "icons"):
+            src = day_dir / l / sub
+            if src.exists():
+                (PUB / l / sub).mkdir(parents=True, exist_ok=True)
+                for f in src.iterdir(): shutil.move(str(f), PUB / l / sub / f.name)
+    entry["n"] = max([h["n"] for h in hist], default=0) + 1
+    hist.append(entry); HIST.write_text(json.dumps(hist, ensure_ascii=False, indent=1))
+    subprocess.run([sys.executable, str(ROOT / "feed.py")], check=False)
+    (day_dir / "PUBLISHED").write_text(dt.datetime.now().isoformat())
+    log("published", day_dir.name)
+
+
+AI_LINE = {"de": "Hinweis: Die Geschichten werden von einer KI geschrieben und von einer KI-generierten Stimme gelesen. Auch die Musik ist KI-generiert.",
+           "en": "Note: the stories are written by an AI and read by an AI-generated voice. The music is also AI-generated."}
+
+
+def fix_text(story_l, lang, problems, st):
+    """rewrite the story so that the concrete problems the judge named are gone (same length, same calm ending)"""
+    sysmsg = (f"Du bist Lektorin für Einschlafgeschichten für Kleinkinder ({st['label']}). Der Text hat diese Probleme: {problems}\n"
+              "Behebe genau diese Probleme: unsinnige oder falsche Sätze, Grammatikfehler, fremdsprachige Wörter, Schleifen, Unpassendes oder Gruseliges. "
+              f"Behalte Handlung, Länge (±10 Prozent), Absätze (Leerzeilen), einfache kurze Sätze (höchstens {st['sent']} Wörter) und das ruhige Einschlafen am Ende. "
+              + ("Sprache: Deutsch. " if lang == "de" else "Language: English only, simple and warm. ") + "Gib NUR den verbesserten Text aus, ohne Titel, ohne Kommentar.")
+    new = [p.strip().replace("\n", " ") for p in re.split(r"\n\s*\n", clean_text(ollama(sysmsg, "\n\n".join(story_l["paragraphs"]), temp=0.4))) if p.strip()]
+    new = regroup(words_out(new, NUM_DE if lang == "de" else NUM_EN)) if lang == "de" else words_out(new, NUM_EN)
+    n0, n1 = len(" ".join(story_l["paragraphs"]).split()), len(" ".join(new).split())
+    if 0.8 * n0 <= n1 <= 1.25 * n0 and len(new) >= 3:
+        story_l = dict(story_l, paragraphs=new, words=n1); story_l.pop("paragraphs_hess", None)
+        return story_l
+    return None
+
+
+def repair(lang, rep, story, st, state, entry, art_big):
+    """turn a failed quality report into concrete fixes, cheapest first. returns what was changed ([] = nothing left to try, the episode is held)"""
+    import qc
+    fails = {c["name"]: c for c in rep["checks"] if c["status"] == "fail"}
+    o = state["opts"]; done = []
+    if "loudness" in fails or "true peak" in fails:
+        if not o.get("norm"): o["norm"] = True; done.append("loudness-normalise with a true-peak limiter")
+    if "clicks" in fails and not o.get("declick"):
+        o["declick"] = True; done.append("remove clicks")
+    if "dead air" in fails and not o.get("trim"):
+        o["trim"] = True; done.append("cut long silent stretches in the voice")
+    if "mp3 complete" in fails or "cover art" in fails:
+        done.append("re-encode the mp3 with the cover")
+    if "clear under music" in fails and not any(n in fails for n in ("script match", "garbled passages", "stray speech")):
+        o["music"] = min(o.get("music", 1.0), 0.45); o["sfx2"] = False; done.append("quieter music and no sound effects in the second reading (the voice itself is fine)")
+    if any(n in fails for n in ("script match", "garbled passages", "stray speech")):
+        bad = (fails.get("garbled passages") or {}).get("data") or []
+        if not state.get("quiet_music"):
+            o["music"] = 0.55; o["tempo2"] = 0.94; state["quiet_music"] = True; done.append("quieter music under the voice and a less slowed second reading")
+        elif not state.get("quieter2"):
+            o["music"] = 0.4; o["sfx2"] = False; state["quieter2"] = True
+            done.append("even quieter music and no sound effects in the slow second reading (the voice alone is clear)")
+        elif bad:
+            segs = script_segments(story[lang], lang, st); pos = 0; spans = []
+            for kind, idx, text in segs:
+                n = len(qc._words(text)); spans.append((pos, pos + n, kind, idx, text)); pos += n
+            touched = set()
+            for k in bad:
+                for a0, a1, kind, idx, text in spans:
+                    if a0 < k + 25 and k < a1:
+                        if kind in ("para1", "para2"):
+                            for ch in chunks_of(text):       # re-record only the passages around the bad words
+                                touched.add(ch)
+                        else:
+                            touched.add(text)
+            for t in touched: bump_salt(lang, t)
+            for f in WORK.glob(f"fixed_{lang}_*.npz"): f.unlink()
+            done.append(f"re-record {len(touched)} passage(s) with a new take")
+        else:
+            for kind, idx, text in script_segments(story[lang], lang, st):
+                if kind != "fixed":
+                    for ch in chunks_of(text): bump_salt(lang, ch)
+            done.append("re-record the whole reading with new takes")
+    if ("steady voice" in fails) and not state.get("rerecorded"):
+        state["rerecorded"] = True
+        for kind, idx, text in script_segments(story[lang], lang, st):
+            if kind == "para1":
+                for ch in chunks_of(text): bump_salt(lang, ch)
+        done.append("re-record the reading (the voice drifted)")
+    if ("meaning" in fails or "safety" in fails) and not state.get("text_fixed"):
+        state["text_fixed"] = True
+        problems = (fails.get("meaning") or fails.get("safety"))["detail"]
+        new = fix_text(story[lang], lang, problems, st)
+        if new:
+            story[lang] = new
+            if lang == "de" and "en" in story and story["en"]:   # keep the English translation in step with the fixed German story
+                try: story["en"] = translate(new)
+                except SystemExit: pass
+            entry[lang]["blurb"] = episode_blurb(story[lang], lang, st)
+            done.append("rewrite the story to remove the judge's problems")
+    # metadata
+    child_d = child()
+    if "privacy" in fails:
+        for k in ("title", "description", "blurb"):
+            for v in (child_d.get("name"), child_d.get("birthdate")):
+                if v: entry[lang][k] = re.sub(re.escape(v), "dein Kind" if lang == "de" else "your child", entry[lang][k], flags=re.I)
+        done.append("remove the child's details from the public text")
+    if "AI disclosure" in fails:
+        for k in ("description", "blurb"):
+            if AI_LINE[lang] not in entry[lang].get(k, ""): entry[lang][k] = (entry[lang].get(k, "") + " " + AI_LINE[lang]).strip()
+        done.append("add the AI disclosure line")
+    if "title spelling" in fails:
+        fix = fails["title spelling"]["detail"]
+        m = re.search(r"FIX:\s*(.+?)\s*->\s*(.+)", fix)
+        if m:
+            wrong, right = m.group(1).strip(" '\""), m.group(2).strip(" '\"")
+            for key in ("title",):
+                story[lang][key] = story[lang][key].replace(wrong, right)
+            for k in ("description", "blurb"): entry[lang][k] = entry[lang].get(k, "").replace(wrong, right)
+            entry[lang]["title"] = story[lang]["title"]
+            done.append(f"correct the spelling '{wrong}' -> '{right}'")
+    if "title/description" in fails:
+        entry[lang]["description"] = story[lang].get("description") or episode_blurb(story[lang], lang, st); done.append("rewrite the description")
+    return done
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--theme"); ap.add_argument("--short", action="store_true"); ap.add_argument("--dry-story", action="store_true")
@@ -599,13 +968,15 @@ def main():
         themes.append(l)
     used = {h["theme"] for h in hist[-(len(themes) - 1):]}
     theme = a.theme or random.Random(dt.date.today().toordinal()).choice([t for t in themes if t not in used] or themes)
-    log(f"child age {months} months -> stage {st['label']} | theme: {theme}")
+    used_s = [h.get("structure") for h in hist[-(len(STRUCTURES) - 1):]]
+    structure = random.Random(dt.date.today().toordinal() * 7).choice([k for k in STRUCTURES if k not in used_s] or list(STRUCTURES))
+    log(f"child age {months} months -> stage {st['label']} | theme: {theme} | form: {structure}")
     name = child().get("name")
     story = {}
     if a.from_last:
         story = json.loads((WORK / "last_story.json").read_text()); theme = story.get("theme", theme)
     for _ in range(0 if a.from_last else 3):
-        s_de = make_story_de(theme, [h["de"]["title"] for h in hist], st, name, a.short, a.form)
+        s_de = make_story_de(theme, [h["de"]["title"] for h in hist], st, name, a.short, a.form, structure)
         s_en = translate(s_de) if "en" in langs else None
         if safety_check(s_de, "de") and (s_en is None or safety_check(s_en, "en")):
             story = {"de": s_de, "en": s_en}; break
@@ -627,23 +998,64 @@ def main():
         art_big, art_icon = art.episode_art(scene, obj)
     except Exception as e:
         log("artwork failed (show cover is used instead):", str(e)[:120])
-    number = max([h["n"] for h in hist], default=0) + 1; today = str(dt.date.today()); entry = dict(n=number, date=today, theme=theme, age_months=months, stage=st["label"], voice=VOICE)
+    number = max([h["n"] for h in hist], default=0) + 1; today = str(dt.date.today())
+    entry = dict(n=number, date=today, theme=theme, structure=structure, age_months=months, stage=st["label"], voice=VOICE)
+    day = STAGE / today; import shutil
+    if day.exists(): shutil.rmtree(day)
     for l in langs:
-        log(f"=== building {l}")
-        mix = build(story[l], l, st)
-        mp3 = PUB / l / "episodes" / f"{slug(today, story[l]['title'])}.mp3"
-        cover = None
-        if art_big is not None:
-            cover = mp3.with_suffix(".jpg"); art_big.save(cover, quality=90)
-            (PUB / l / "icons").mkdir(parents=True, exist_ok=True)
-            art_icon.save(PUB / l / "icons" / (mp3.stem + ".png")); art_icon.resize((256, 256), __import__("PIL.Image", fromlist=["Image"]).NEAREST).save(PUB / l / "icons" / (mp3.stem + ".preview.png"))
-        encode(l, mp3, story[l], number, cover)
-        q = {} if a.no_qa else qa(l, story[l])
-        log(f"QA [{l}]:", json.dumps(q, ensure_ascii=False)[:500])
-        entry[l] = dict(title=story[l]["title"], description=story[l]["description"], blurb=episode_blurb(story[l], l, st), stage=st["label"], file=mp3.name, bytes=mp3.stat().st_size,
-                        seconds=round(len(mix) / SR), qa=q.get("flags", []), script_match=q.get("script_match"))
-    hist.append(entry); HIST.write_text(json.dumps(hist, ensure_ascii=False, indent=1))
-    subprocess.run([sys.executable, str(ROOT / "feed.py")], check=False)
+        (day / l / "episodes").mkdir(parents=True, exist_ok=True)
+    reports = {}; MAX_TRIES = int(os.environ.get("QC_TRIES", "4"))
+    ollama_unload()   # story work is done: the voice gets the GPU alone
+    for l in langs:
+        state = {"opts": {}}
+        for attempt in range(1, MAX_TRIES + 1):
+            ollama_unload()
+            log(f"=== building {l} (attempt {attempt})")
+            mix = build(story[l], l, st, state["opts"])
+            mp3 = day / l / "episodes" / f"{slug(today, story[l]['title'])}.mp3"
+            cover = None
+            if art_big is not None:
+                cover = mp3.with_suffix(".jpg"); art_big.save(cover, quality=90)
+                (day / l / "icons").mkdir(parents=True, exist_ok=True)
+                art_icon.save(day / l / "icons" / (mp3.stem + ".png")); art_icon.resize((256, 256), __import__("PIL.Image", fromlist=["Image"]).NEAREST).save(day / l / "icons" / (mp3.stem + ".preview.png"))
+            encode(l, mp3, story[l], number, cover, state["opts"])
+            if l not in entry:
+                entry[l] = dict(description=story[l]["description"], blurb=episode_blurb(story[l], l, st), stage=st["label"])
+            entry[l].update(title=story[l]["title"], file=mp3.name, bytes=mp3.stat().st_size, seconds=round(len(mix) / SR), qa=[], script_match=None)
+            (day / "entry.json").write_text(json.dumps(entry, ensure_ascii=False, indent=1))
+            if a.no_qa:
+                break
+            log(f"quality gate [{l}] ...")
+            tts_unload()
+            import qc
+            reports[l] = qc.run(l, mp3, WORK / f"mix_{l}.wav", WORK / f"first_{l}.wav", cover or (PUB / l / "cover.jpg"), entry[l], expected_script(story[l], l, st), st["label"], ollama,
+                                safety_check, story[l], child(), lo_min=6 if a.short else 9, hi_min=40, dialect=(l == "de" and DIALECT == "hessisch"),
+                                require_ai=bool(os.environ.get("QC_REQUIRE_AI")), voice_wav=WORK / f"voice_{l}.wav")
+            (day / f"qc_{l}_attempt{attempt}.json").write_text(json.dumps(reports[l], ensure_ascii=False, indent=1))
+            (day / f"qc_{l}.json").write_text(json.dumps(reports[l], ensure_ascii=False, indent=1))
+            log(qc.format_report(reports[l]))
+            if reports[l]["verdict"] == "PASS":
+                break
+            if attempt == MAX_TRIES:
+                break
+            fixes = repair(l, reports[l], story, st, state, entry, art_big)
+            ollama_unload()
+            if not fixes:
+                log(f"auto-repair [{l}]: nothing more to try"); break
+            log(f"auto-repair [{l}]: " + "; ".join(fixes))
+            (WORK / "last_story.json").write_text(json.dumps(dict(story, theme=theme), ensure_ascii=False, indent=1))
+    failed = [l for l, r in reports.items() if r["verdict"] != "PASS"]
+    if failed:
+        why = "; ".join(f"{l}: " + ", ".join(c["name"] for c in reports[l]["checks"] if c["status"] == "fail") for l in failed)
+        log(f"HELD: quality gate failed ({why}). Episode stays in {day}; nothing was published.")
+        notify("Podcast episode held back", f"Today's episode did not pass the quality check ({why}). Nothing was published. Report: {day}/qc_*.json")
+        raise SystemExit(2)
+    if os.environ.get("MANUAL_APPROVAL"):
+        log(f"quality gate passed; waiting for your approval: python publish.py {today}")
+        notify("Podcast episode ready for review", f"Passed all automatic checks. Listen to it in {day} and approve with: python publish.py {today}")
+        return
+    publish(day)
+    notify("Podcast episode published", f"{entry['de']['title'] if 'de' in entry else ''} / {entry['en']['title'] if 'en' in entry else ''} passed the quality gate and is live.")
     log("done")
 
 
