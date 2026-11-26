@@ -39,5 +39,8 @@ Serve `public/` over HTTPS at a stable URL (see `docker-compose.example.yml`) an
 - Everything runs locally; the only outbound traffic is downloading models and serving your feed.
 - Stories pass a safety check (no scary or violent content) before anything is voiced; nothing is published automatically except through your own web server.
 
+## Contributing
+Improvements are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Contributions are accepted under the MIT licence.
+
 ## Licences
 Code: MIT. Check each model's licence before use: Qwen3-TTS, your Ollama model, Whisper and SDXL-Turbo each have their own terms. The optional XTTS-v2 fallback is under a personal non-commercial licence. The music is generated procedurally by `music.py` from original melodies.
